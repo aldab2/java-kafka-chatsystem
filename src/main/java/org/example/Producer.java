@@ -12,18 +12,18 @@ public class Producer {
     public static void main(String[] args) {
 
 
-        String bootstrapServers = "172.22.40.29:9092";
+        String bootstrapServers = "172.18.44.50:9092";
 
-        // create Producer properties
-        Properties properties = new Properties();
-        properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        // create Producer producerProperties
+        Properties producerProperties = new Properties();
+        producerProperties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        producerProperties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProperties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+        KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);
 
         ProducerRecord<String, String> producerRecord =
-                new ProducerRecord<>("general", "hello world");
+                new ProducerRecord<>("dev", "hello world");
 
         // send data - asynchronous
         producer.send(producerRecord);

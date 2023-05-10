@@ -1,5 +1,6 @@
 package org.example;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -9,9 +10,9 @@ import java.util.Arrays;
 import java.util.Properties;
 public class Consumer {
     public static void main(String[] args) {
-        String bootstrapServers = "172.22.40.29:9092";
-        String groupId = "group3";
-        String topic = "general";
+        String bootstrapServers = "172.18.44.50:9092";
+        String groupId = "group987548";
+        String topic = "dev";
 
         // create consumer configs
         Properties properties = new Properties();
@@ -24,16 +25,17 @@ public class Consumer {
         properties.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,"4000");
         System.out.println("Connecting to "+ bootstrapServers+ "...");
 
+
+
         try (KafkaConsumer<String,String> consumer =new KafkaConsumer<>(properties)) {
             System.out.println("Subscribing to topic: "+ topic + "...");
             consumer.subscribe(Arrays.asList(topic));
             System.out.println("Subscription done.");
             int i = 0;
             while(true){
-                System.out.println("Consuming...");
                 ConsumerRecords<String, String> records =
-                        consumer.poll(Duration.ofMillis(1000));
-
+                        consumer.poll(Duration.ofMillis(1));
+//
 //            if(i % 100 ==0 ){
 //                System.out.println("Hi");
 //            }

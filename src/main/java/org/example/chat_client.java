@@ -52,6 +52,7 @@ public class chat_client extends javax.swing.JFrame {
     KafkaProducer<String, String> producer;
     private AdminClient client = null;
     ArrayList<String> topics = new ArrayList<>();
+    JComboBox topicList;
 
 
     public chat_client(String s) {
@@ -61,6 +62,8 @@ public class chat_client extends javax.swing.JFrame {
         conf.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "5000");
         client = AdminClient.create(conf);
 
+
+
         ListTopicsResult listTopicsResult = client.listTopics();
 
         try {
@@ -68,13 +71,34 @@ public class chat_client extends javax.swing.JFrame {
 
             topics.forEach((topic,topicInfo)-> this.topics.add(topic));
 
+
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
 
-        new JOptionPaneMultiInput(this.topics);
+        JOptionPaneMultiInput optionPanel = new JOptionPaneMultiInput(this.topics);
+
+        this.username = optionPanel.username;
+        this.topic = optionPanel.chatroom;
+        System.out.println("Topic is "+this.topic+" username is "+this.username);
+
+        setupProducerAndConsumer();
+
+        producer = new KafkaProducer<>(producerProperties);
 
 
+
+
+        
+        initComponents();
+        
+        this.setTitle("Client");
+        this.setVisible(true);
+        status.setVisible(true);
+        serverIP = s;
+    }
+
+    private void setupProducerAndConsumer() {
         // create consumer configs
         this.consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -91,22 +115,9 @@ public class chat_client extends javax.swing.JFrame {
         producerProperties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProperties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         //System.out.println("Connecting to "+ bootstrapServers+ "...");
-
-        producer = new KafkaProducer<>(producerProperties);
-
-
-
-
-        
-        initComponents();
-        
-        this.setTitle("Client");
-        this.setVisible(true);
-        status.setVisible(true);
-        serverIP = s;
     }
 
-    
+
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {

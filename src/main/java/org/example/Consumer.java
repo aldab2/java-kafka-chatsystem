@@ -30,6 +30,7 @@ public class Consumer {
         try (KafkaConsumer<String,String> consumer =new KafkaConsumer<>(properties)) {
             System.out.println("Subscribing to topic: "+ topic + "...");
             consumer.subscribe(Arrays.asList(topic));
+            
             System.out.println("Subscription done.");
             int i = 0;
             while(true){

@@ -1,8 +1,11 @@
 package org.example;
+import org.apache.kafka.clients.admin.ConsumerGroupListing;
+
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.Collection;
 
 public class JOptionPaneMultiInput implements ActionListener {
     JTextField xField ;//= new JTextField(5);
@@ -13,11 +16,13 @@ public class JOptionPaneMultiInput implements ActionListener {
 
 
     ArrayList<String> rooms;
-    JOptionPaneMultiInput(ArrayList<String> rooms){
+    Collection<ConsumerGroupListing> consumerGroups;
+    JOptionPaneMultiInput(ArrayList<String> rooms,Collection<ConsumerGroupListing> consumerGroups){
         this.rooms = rooms;
         this.rooms.forEach(room -> System.out.println(room));
-        JTextField xField = new JTextField(5);
-        JTextField yField = new JTextField(5);
+        this.consumerGroups = consumerGroups;
+        JTextField xField = new JTextField(10);
+        JTextField yField = new JTextField(10);
 
         JPanel myPanel = new JPanel();
         JComboBox topicList = new JComboBox(this.rooms.toArray());
@@ -31,13 +36,6 @@ public class JOptionPaneMultiInput implements ActionListener {
         myPanel.add(Box.createVerticalStrut(5)); // a spacer
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(("Rooms are:"));
-        String str = "Rooms are:";
-        rooms.forEach(room -> {
-           stringBuilder.append(room);
-
-        });
-
-        myPanel.add(new JLabel(stringBuilder.toString()));
 
 
         int result = JOptionPane.showConfirmDialog(null, myPanel,
@@ -45,6 +43,13 @@ public class JOptionPaneMultiInput implements ActionListener {
         if (result == JOptionPane.OK_OPTION) {
             this.username = xField.getText();
             this.chatroom = (String) topicList.getSelectedItem();
+            boolean isActive = false;
+            for ( ConsumerGroupListing group: this.consumerGroups
+                 ) {
+                if(group.groupId().equals(this.username)){
+                    this.username = null;
+                }
+            }
             System.out.println("x value: " + xField.getText());
         }
     }

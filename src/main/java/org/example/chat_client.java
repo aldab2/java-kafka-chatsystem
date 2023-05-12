@@ -1,10 +1,7 @@
 package org.example;
 
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.ListTopicsResult;
-import org.apache.kafka.clients.admin.TopicListing;
+import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -20,28 +17,16 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.InetAddress;
-import java.net.Socket;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.Timer;
+import java.util.concurrent.*;
 
 public class chat_client extends javax.swing.JFrame {
 
-    private ObjectOutputStream output;
-    private ObjectInputStream input;
     private String message="";
-    private String serverIP;
-    private Socket connection;
-    private int port = 6789;
-    final static String secretKey = "secrete";
-    EncryDecry encyrDecry = new EncryDecry();
 
-    final static String bootstrapServers = "20.4.51.187:9092,165.22.26.150:9092,159.65.113.104:9092,46.101.119.158:9092";
+     String bootstrapServers ;
 
     private String topic = "dev";
     private String username = "Barnawi";
@@ -53,9 +38,12 @@ public class chat_client extends javax.swing.JFrame {
     private AdminClient client = null;
     ArrayList<String> topics = new ArrayList<>();
     JComboBox topicList;
-
+    Collection<ConsumerGroupListing> consumerGroups;
 
     public chat_client(String s) {
+
+
+        this.bootstrapServers = s;
 
         Map<String, Object> conf = new HashMap<>();
         conf.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -64,24 +52,36 @@ public class chat_client extends javax.swing.JFrame {
 
 
 
+
         ListTopicsResult listTopicsResult = client.listTopics();
 
         try {
             Map<String, TopicListing> topics = listTopicsResult.namesToListings().get();
-
             topics.forEach((topic,topicInfo)-> this.topics.add(topic));
+
+            ListConsumerGroupsResult consumerGroup = client.listConsumerGroups();
+            this.consumerGroups = consumerGroup.all().get();
+
+            consumerGroups.removeIf(group -> group.toString().contains("Empty"));
+
+
 
 
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
 
-        JOptionPaneMultiInput optionPanel = new JOptionPaneMultiInput(this.topics);
+        JOptionPaneMultiInput optionPanel = new JOptionPaneMultiInput(this.topics,this.consumerGroups);
 
         this.username = optionPanel.username;
         this.topic = optionPanel.chatroom;
         System.out.println("Topic is "+this.topic+" username is "+this.username);
 
+
+        if(this.username == null){
+            JOptionPane.showMessageDialog(null,"error in username, maybe its online already","Warning",JOptionPane.WARNING_MESSAGE);
+            System.exit(-1);
+        }
         setupProducerAndConsumer();
 
         producer = new KafkaProducer<>(producerProperties);
@@ -95,7 +95,6 @@ public class chat_client extends javax.swing.JFrame {
         this.setTitle("Client");
         this.setVisible(true);
         status.setVisible(true);
-        serverIP = s;
     }
 
     private void setupProducerAndConsumer() {
@@ -106,8 +105,8 @@ public class chat_client extends javax.swing.JFrame {
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, username);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        //consumerProperties.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,"1000");
-        //consumerProperties.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,"4000");
+        consumerProperties.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,"1500");
+        consumerProperties.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,"4000");
 
         // -----
         this.producerProperties = new Properties();
@@ -209,19 +208,78 @@ public class chat_client extends javax.swing.JFrame {
     
     public void startRunning()
     {
+
+
+        try (KafkaConsumer<String,String> consumer =new KafkaConsumer<>(consumerProperties)) {
+
+            status.setText("Attempting Connection ...");
+            System.out.println("Subscribing to topic: "+ topic + "...");
+            consumer.subscribe(Arrays.asList(topic));
+            Map<String, List<PartitionInfo>> topics = consumer.listTopics();
+            System.out.println("Subscription done. Topics are:"+  topics.keySet());
+            status.setText("Connected as: " + username + "   ------- Chatroom is : "+ topic);
+
+            Timer timer = new Timer();
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() { // Function runs every MINUTES minutes.
+                    // Run the code you want here
+                    int CONNECTION_TEST_TIMEOUT_SECONDS = 1; // or whatever is appropriate for your environment
+
+                    ExecutorService executor = Executors.newSingleThreadExecutor();
+                    Runnable testTask = consumer::listTopics;
+
+                    Future<?> future = executor.submit(testTask);
+                    try {
+                        System.out.println(("Retesting connection"));
+                         future.get(CONNECTION_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                         consumer.listTopics(Duration.ofSeconds(2));
+                    } catch (TimeoutException te) {
+                        consumer.wakeup();
+                        JOptionPane.showMessageDialog(null,"Could not communicate with the server within " + CONNECTION_TEST_TIMEOUT_SECONDS + " seconds","Warning",JOptionPane.WARNING_MESSAGE);
+                        return ;
+
+                    } catch (InterruptedException e) {
+                        // Nothing to do. Maybe a warning in the log?
+                        JOptionPane.showMessageDialog(null,"Consumer got interrupted","Warning",JOptionPane.WARNING_MESSAGE);
+
+                    } catch (ExecutionException e) {
+                        if(!e.getMessage().contains("not safe for multi-threaded"))
+                            JOptionPane.showMessageDialog(null,"Consumer got Execution Exception"+ e.getMessage() + e.getCause().getMessage(),"Warning",JOptionPane.WARNING_MESSAGE);
+                    }
+                    catch (Exception e){
+                        JOptionPane.showMessageDialog(null,"Consumer got  Exception"+ e.getMessage() + e.getCause().getMessage(),"Warning",JOptionPane.WARNING_MESSAGE);
+
+                    }
+                }
+            }, 0, 1000 * 10 );
+
+
+            int i = 0;
+            while(!message.equals("Client - END")){
+                ConsumerRecords<String, String> records =
+                        consumer.poll(Duration.ofMillis(1));
+
+                for (ConsumerRecord<String, String> record : records){
+                    System.out.println("Key: " + record.key() + ", Value: " + record.value());
+                    System.out.println("Partition: " + record.partition() + ", Offset:" + record.offset());
+
+                    message = record.value();
+                    chatArea.append("\n"+ message);
+                }
+
+
+                int MINUTES = 10; // The delay in minutes
+
+
+            }
+
+        }
        try
        {
-            status.setText("Attempting Connection ...");
-            try
-            {
-                connection = new Socket(InetAddress.getByName(serverIP),port);
 
-            }catch(IOException ioEception)
-            {
-                    JOptionPane.showMessageDialog(null,"Server Might Be Down!","Warning",JOptionPane.WARNING_MESSAGE);
-            }
             //status.setText("Connected to: " + connection.getInetAddress().getHostName());
-           status.setText("Connected as: " + username + "   ------- Chatroom is : "+ topic);
+
 
             //output = new ObjectOutputStream(connection.getOutputStream());
             //output.flush();
@@ -237,44 +295,9 @@ public class chat_client extends javax.swing.JFrame {
     
     private void whileChatting() throws IOException
     {
-      //jTextField1.setEditable(true);
-        System.out.println("Inside While CHatting");
-
-        try (KafkaConsumer<String,String> consumer =new KafkaConsumer<>(consumerProperties)) {
-            System.out.println("Subscribing to topic: "+ topic + "...");
-            consumer.subscribe(Arrays.asList(topic));
-            Map<String, List<PartitionInfo>> topics = consumer.listTopics();
-            System.out.println("Subscription done. Topics are:"+  topics.keySet());
 
 
-            int i = 0;
-            while(!message.equals("Client - END")){
-                ConsumerRecords<String, String> records =
-                        consumer.poll(Duration.ofMillis(1));
 
-//            if(i % 100 ==0 ){
-//                System.out.println("Hi");
-//            }
-//            i++;
-                for (ConsumerRecord<String, String> record : records){
-                    System.out.println("Key: " + record.key() + ", Value: " + record.value());
-                    System.out.println("Partition: " + record.partition() + ", Offset:" + record.offset());
-
-                    message = record.value();
-                    chatArea.append("\n"+ message);
-                }
-            }
-        }
-//      do{
-//              try
-//              {
-//                      message = (String) input.readObject();
-//                      chatArea.append("\n"+message);
-//              }
-//              catch(ClassNotFoundException classNotFoundException)
-//              {
-//              }
-//      }while(!message.equals("Client - END"));
     }
   
     

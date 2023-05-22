@@ -17,6 +17,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 import java.io.IOException;
+import java.sql.Time;
 import java.time.Duration;
 import java.util.*;
 import java.util.Timer;
@@ -37,7 +38,6 @@ public class chat_client extends javax.swing.JFrame {
     KafkaProducer<String, String> producer;
     private AdminClient client = null;
     ArrayList<String> topics = new ArrayList<>();
-    JComboBox topicList;
     Collection<ConsumerGroupListing> consumerGroups;
 
     public chat_client(String s) {
@@ -53,10 +53,11 @@ public class chat_client extends javax.swing.JFrame {
 
 
 
-        ListTopicsResult listTopicsResult = client.listTopics();
+
 
         try {
-            Map<String, TopicListing> topics = listTopicsResult.namesToListings().get();
+            ListTopicsResult listTopicsResult = client.listTopics();
+            Map<String, TopicListing> topics = listTopicsResult.namesToListings().get(15,TimeUnit.SECONDS);
             topics.forEach((topic,topicInfo)-> this.topics.add(topic));
 
             ListConsumerGroupsResult consumerGroup = client.listConsumerGroups();
@@ -69,6 +70,10 @@ public class chat_client extends javax.swing.JFrame {
 
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
+        }
+        catch (TimeoutException te){
+            JOptionPane.showMessageDialog(null,"System Timed out, check connection and try again","Warning",JOptionPane.WARNING_MESSAGE);
+            System.exit(-1);
         }
 
         JOptionPaneMultiInput optionPanel = new JOptionPaneMultiInput(this.topics,this.consumerGroups);
@@ -104,7 +109,8 @@ public class chat_client extends javax.swing.JFrame {
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, username);
-        consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProperties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         consumerProperties.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,"1500");
         consumerProperties.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,"4000");
 
@@ -224,7 +230,7 @@ public class chat_client extends javax.swing.JFrame {
                 @Override
                 public void run() { // Function runs every MINUTES minutes.
                     // Run the code you want here
-                    int CONNECTION_TEST_TIMEOUT_SECONDS = 1; // or whatever is appropriate for your environment
+                    int CONNECTION_TEST_TIMEOUT_SECONDS = 15; // or whatever is appropriate for your environment
 
                     ExecutorService executor = Executors.newSingleThreadExecutor();
                     Runnable testTask = consumer::listTopics;
@@ -232,12 +238,13 @@ public class chat_client extends javax.swing.JFrame {
                     Future<?> future = executor.submit(testTask);
                     try {
                         System.out.println(("Retesting connection"));
+                        ListTopicsResult listTopicsResult = client.listTopics();
+                        Map<String, TopicListing> topics = listTopicsResult.namesToListings().get(2,TimeUnit.SECONDS);
                          future.get(CONNECTION_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                         consumer.listTopics(Duration.ofSeconds(2));
                     } catch (TimeoutException te) {
                         consumer.wakeup();
-                        JOptionPane.showMessageDialog(null,"Could not communicate with the server within " + CONNECTION_TEST_TIMEOUT_SECONDS + " seconds","Warning",JOptionPane.WARNING_MESSAGE);
-                        return ;
+                        JOptionPane.showMessageDialog(null,"Could not communicate with the server within " + CONNECTION_TEST_TIMEOUT_SECONDS + " seconds, Exiting.","Warning",JOptionPane.WARNING_MESSAGE);
+                        System.exit(-1);
 
                     } catch (InterruptedException e) {
                         // Nothing to do. Maybe a warning in the log?
@@ -252,7 +259,7 @@ public class chat_client extends javax.swing.JFrame {
 
                     }
                 }
-            }, 0, 1000 * 10 );
+            }, 0, 1000 * 30 );
 
 
             int i = 0;
@@ -310,7 +317,7 @@ public class chat_client extends javax.swing.JFrame {
                     new ProducerRecord<>(topic, username+":"+ message);
 
             Future<RecordMetadata> f = producer.send(producerRecord);
-            f.get(2, TimeUnit.SECONDS);
+            f.get(15, TimeUnit.SECONDS);
             producer.flush();
         }
         catch (Exception e){
